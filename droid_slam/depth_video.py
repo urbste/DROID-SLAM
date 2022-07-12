@@ -4,7 +4,6 @@ import lietorch
 import droid_backends
 
 from torch.multiprocessing import Process, Queue, Lock, Value
-from collections import OrderedDict
 
 from droid_net import cvx_upsample
 import geom.projective_ops as pops

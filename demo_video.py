@@ -18,8 +18,7 @@ import torch.nn.functional as F
 import natsort
 
 def show_image(image):
-    image = image.permute(1, 2, 0).cpu().numpy()
-    cv2.imshow('image', image / 255.0)
+    cv2.imshow('image', image)
     cv2.waitKey(1)
 
 def image_stream(imagedir, calib, stride):
@@ -69,17 +68,40 @@ def save_reconstruction(droid, reconstruction_path):
     poses = droid.video.poses[:t].cpu().numpy()
     intrinsics = droid.video.intrinsics[:t].cpu().numpy()
 
+    fmaps = droid.video.fmaps[:t].cpu().numpy()
+    nets = droid.video.nets[:t].cpu().numpy()
+    inps = droid.video.inps[:t].cpu().numpy()
+
     Path("{}".format(reconstruction_path)).mkdir(parents=True, exist_ok=True)
     np.save("{}/tstamps.npy".format(reconstruction_path), tstamps)
     np.save("{}/images.npy".format(reconstruction_path), images)
     np.save("{}/disps.npy".format(reconstruction_path), disps)
     np.save("{}/poses.npy".format(reconstruction_path), poses)
     np.save("{}/intrinsics.npy".format(reconstruction_path), intrinsics)
+    np.save("{}/fmaps.npy".format(reconstruction_path), fmaps)
+    np.save("{}/nets.npy".format(reconstruction_path), nets)
+    np.save("{}/inps.npy".format(reconstruction_path), inps)
 
+def convert_image(image, intrinsics):
+
+    h0, w0, _ = image.shape
+    h1 = int(h0 * np.sqrt((384 * 512) / (h0 * w0)))
+    w1 = int(w0 * np.sqrt((384 * 512) / (h0 * w0)))
+
+    image = cv2.resize(image, (w1, h1))
+    image = image[:h1-h1%8, :w1-w1%8]
+    image_t = torch.as_tensor(image).permute(2, 0, 1)
+
+    intrinsics_t = torch.as_tensor([fx, fy, cx, cy])
+
+    intrinsics_t[0::2] *= (w1 / w0)
+    intrinsics_t[1::2] *= (h1 / h0)
+
+    return image_t[None], intrinsics_t
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--imagedir", type=str, help="path to image directory")
+    parser.add_argument("--video", type=str, help="path to image directory")
     parser.add_argument("--calib", type=str, help="path to calibration file")
     parser.add_argument("--t0", default=0, type=int, help="starting frame")
     parser.add_argument("--stride", default=3, type=int, help="frame stride")
@@ -114,21 +136,47 @@ if __name__ == '__main__':
     if args.reconstruction_path is not None:
         args.upsample = True
 
+    calib = np.loadtxt(args.calib, delimiter=" ")
+    fx, fy, cx, cy = calib[:4]
+
+    K = np.eye(3)
+    K[0,0] = fx
+    K[0,2] = cx
+    K[1,1] = fy
+    K[1,2] = cy
+
     tstamps = []
-    for (t, image, intrinsics) in tqdm(image_stream(args.imagedir, args.calib, args.stride)):
-        if t < args.t0:
+
+    invalid_images = 0
+    had_zero = False
+    frame_id = 0
+    cap = cv2.VideoCapture(args.video)
+    while True:
+        ret, I = cap.read()
+        ts_ns = int(1e6*cap.get(cv2.CAP_PROP_POS_MSEC))
+        if not ret:
+            invalid_images += 1
+            if invalid_images > 100:
+                break
             continue
+        if had_zero and ts_ns == 0:
+            continue
+        I = cv2.resize(I, (480, 270))
+
+        image_t, intrinsics_t = convert_image(I, K)
 
         if not args.disable_vis:
-            show_image(image[0])
+            show_image(I)
 
         if droid is None:
-            args.image_size = [image.shape[2], image.shape[3]]
+            args.image_size = [image_t.shape[2], image_t.shape[3]]
             droid = Droid(args)
         
-        droid.track(t, image, intrinsics=intrinsics)
+        droid.track(ts_ns, image_t, intrinsics=intrinsics_t)
+
 
     if args.reconstruction_path is not None:
         save_reconstruction(droid, args.reconstruction_path)
 
     traj_est = droid.terminate(image_stream(args.imagedir, args.calib, args.stride))
+
