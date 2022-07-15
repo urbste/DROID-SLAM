@@ -54,33 +54,17 @@ def image_stream(imagedir, calib, stride):
         time_ns = int(imfile[:imfile.rfind(".")])
         yield time_ns, image[None], intrinsics
 
-
-def save_reconstruction(droid, reconstruction_path):
+def load_reconstruction(args):
 
     from pathlib import Path
     import random
-    import string
-
-    t = droid.video.counter.value
-    tstamps = droid.video.tstamp[:t].cpu().numpy()
-    images = droid.video.images[:t].cpu().numpy()
-    disps = droid.video.disps_up[:t].cpu().numpy()
-    poses = droid.video.poses[:t].cpu().numpy()
-    intrinsics = droid.video.intrinsics[:t].cpu().numpy()
-
-    fmaps = droid.video.fmaps[:t].cpu().numpy()
-    nets = droid.video.nets[:t].cpu().numpy()
-    inps = droid.video.inps[:t].cpu().numpy()
-
-    Path("{}".format(reconstruction_path)).mkdir(parents=True, exist_ok=True)
-    np.save("{}/tstamps.npy".format(reconstruction_path), tstamps)
-    np.save("{}/images.npy".format(reconstruction_path), images)
-    np.save("{}/disps.npy".format(reconstruction_path), disps)
-    np.save("{}/poses.npy".format(reconstruction_path), poses)
-    np.save("{}/intrinsics.npy".format(reconstruction_path), intrinsics)
-    np.save("{}/fmaps.npy".format(reconstruction_path), fmaps)
-    np.save("{}/nets.npy".format(reconstruction_path), nets)
-    np.save("{}/inps.npy".format(reconstruction_path), inps)
+    import string    
+    images = np.load("{}/images.npy".format(args.reconstruction_path))
+    args.image_size = [images.shape[2], images.shape[3]]
+    droid = Droid(args)
+    droid.load_from_saved_reconstruction(args.reconstruction_path)
+    last_timestamp = sorted(np.load("{}/tstamps.npy".format(args.reconstruction_path)).tolist())[-1]
+    return droid, last_timestamp
 
 def convert_image(image, intrinsics):
 
@@ -101,13 +85,14 @@ def convert_image(image, intrinsics):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--video", default="/home/zosurban/Projects/DROID-SLAM-urbste/data/youtube/NHYoutube.mp4", type=str, help="path to image directory")
+    parser.add_argument("--video", default="/home/zosurban/Projects/DROID-SLAM-urbste/data/youtube/MNYoutube.mp4", type=str, help="path to image directory")
     parser.add_argument("--calib", default="/home/zosurban/Projects/DROID-SLAM-urbste/calib/gopro9_wide.txt", type=str, help="path to calibration file")
     parser.add_argument("--t0", default=0, type=int, help="starting frame")
     parser.add_argument("--stride", default=1, type=int, help="frame stride")
 
     parser.add_argument("--weights", default="droid.pth")
     parser.add_argument("--buffer", type=int, default=512)
+    parser.add_argument("--image_size", default=[240, 320])
     parser.add_argument("--disable_vis", action="store_true")
 
     parser.add_argument("--beta", type=float, default=0.3, help="weight for translation / rotation components of flow")
@@ -126,16 +111,18 @@ if __name__ == '__main__':
     parser.add_argument("--reconstruction_path", 
         default="/home/zosurban/Projects/DROID-SLAM-urbste/data/youtube/NH_results/", 
         help="path to saved reconstruction")
+    parser.add_argument("--do_localization", default=True)
     args = parser.parse_args()
 
     args.stereo = False
     torch.multiprocessing.set_start_method('spawn')
 
-    droid = None
 
     # need high resolution depths
     if args.reconstruction_path is not None:
         args.upsample = True
+
+    droid, last_timestamp = load_reconstruction(args)
 
     calib = np.loadtxt(args.calib, delimiter=" ")
     fx, fy, cx, cy = calib[:4]
@@ -170,16 +157,9 @@ if __name__ == '__main__':
 
         if not args.disable_vis:
             show_image(I)
-
-        if droid is None:
-            args.image_size = [image_t.shape[2], image_t.shape[3]]
-            droid = Droid(args)
         
-        droid.track(ts_ns, image_t, intrinsics=intrinsics_t)
+        droid.track(ts_ns + last_timestamp + 1, image_t, intrinsics=intrinsics_t)
 
-
-    if args.reconstruction_path is not None:
-        save_reconstruction(droid, args.reconstruction_path)
 
     traj_est = droid.terminate(image_stream(args.imagedir, args.calib, args.stride))
 

@@ -4,6 +4,7 @@ import numpy as np
 
 from droid_net import DroidNet
 from depth_video import DepthVideo
+from droid_slam.frame_localizer import ReLocalizer
 from motion_filter import MotionFilter
 from droid_frontend import DroidFrontend
 from droid_backend import DroidBackend
@@ -32,6 +33,9 @@ class Droid:
         # backend process
         self.backend = DroidBackend(self.net, self.video, self.args)
 
+        # relocalizer
+        self.localizer = ReLocalizer(self.net, self.video, self.args)
+
         # visualizer
         if not self.disable_vis:
             from visualization import droid_visualization
@@ -40,6 +44,10 @@ class Droid:
 
         # post processor - fill in poses for non-keyframes
         self.traj_filler = PoseTrajectoryFiller(self.net, self.video)
+
+        # localize new video
+        self.localize_new_video = args.do_localization
+        self.is_localized = False
 
 
     def load_weights(self, weights):
@@ -60,16 +68,25 @@ class Droid:
 
     def track(self, tstamp, image, depth=None, intrinsics=None):
         """ main thread - update map """
-
         with torch.no_grad():
-            # check there is enough motion
-            self.filterx.track(tstamp, image, depth, intrinsics)
+            if self.localize_new_video and not self.is_localized:
+                self.is_localized = self.localize(tstamp, image, None, intrinsics)
+            else:
+                # check there is enough motion
+                self.filterx.track(tstamp, image, depth, intrinsics)
 
             # local bundle adjustment
-            self.frontend()
+            if self.localize_new_video and self.is_localized:
+                self.frontend.is_initialized = True
 
             # global bundle adjustment
             # self.backend()
+
+    def localize(self, tstamp, image, depth=None, intrinsics=None):
+        with torch.no_grad():
+            
+            return self.localizer.localize_frame(tstamp, image, 8.5, None, intrinsics)
+
 
     def terminate(self, stream=None):
         """ terminate the visualization process, return poses [t, q] """
@@ -87,3 +104,29 @@ class Droid:
         camera_trajectory = self.traj_filler(stream)
         return camera_trajectory.inv().data.cpu().numpy()
 
+    def load_from_saved_reconstruction(self, recon_path):
+        tstamps = np.load("{}/tstamps.npy".format(recon_path))
+        images = np.load("{}/images.npy".format(recon_path))
+        disps = np.load("{}/disps.npy".format(recon_path))
+        poses = np.load("{}/poses.npy".format(recon_path))
+        intrinsics = np.load("{}/intrinsics.npy".format(recon_path))
+        fmaps = np.load("{}/fmaps.npy".format(recon_path))
+        nets = np.load("{}/nets.npy".format(recon_path))
+        inps = np.load("{}/inps.npy".format(recon_path))
+
+        self.video.images = torch.tensor(images, device="cuda", dtype=torch.uint8).share_memory_()
+        self.video.disps_up = torch.tensor(disps, device="cuda").share_memory_()
+        depth = self.video.disps_up[:,3::8,3::8]
+        self.disps_sens = torch.where(depth>0, 1.0/depth, depth)
+
+        self.video.poses = torch.tensor(poses, device="cuda", dtype=torch.float).share_memory_()
+        self.video.tstamp = torch.tensor(tstamps, device="cuda", dtype=torch.float).share_memory_()
+        self.video.intrinsics = torch.tensor(intrinsics, device="cuda", dtype=torch.float).share_memory_()
+
+        self.video.fmaps = torch.tensor(fmaps, dtype=torch.half, device="cuda").share_memory_()
+        self.video.nets = torch.tensor(nets, dtype=torch.half, device="cuda").share_memory_()
+        self.video.inps = torch.tensor(inps, dtype=torch.half, device="cuda").share_memory_()
+
+        self.video.counter = torch.multiprocessing.Value('i', self.video.fmaps.shape[0]-1)
+
+        self.localizer.init_factor_graph_from_video()
