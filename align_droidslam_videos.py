@@ -42,11 +42,12 @@ def save_transfromed_poses(path, T12):
 
     return poses_new.T.numpy()
 
-p_w_c2 = load_dataset(
-    "/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/MN_results")
-
 p_w_c1 = load_dataset(
-    "/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/NH_results")
+    "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike1_trail1_results")
+
+p_w_c2 = load_dataset(
+    "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike2_trail1_results")
+
 
 pcl1 = o3d.geometry.PointCloud()
 pcl1.points = o3d.utility.Vector3dVector(p_w_c1)
@@ -67,7 +68,7 @@ trafo_estimator = o3d.pipelines.registration.TransformationEstimationPointToPoin
 T12 = o3d.pipelines.registration.registration_ransac_based_on_correspondence(pcl1, pcl2, corres1, 0.01,
     o3d.pipelines.registration.TransformationEstimationPointToPoint(with_scaling=True), ransac_n=6)
 
-transformed_poses = save_transfromed_poses("/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/NH_results", T12.transformation)
+transformed_poses = save_transfromed_poses("/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike1_trail1_results", T12.transformation)
 
 pcl1 = o3d.geometry.PointCloud()
 pcl1.points = o3d.utility.Vector3dVector(transformed_poses[:,0:3])

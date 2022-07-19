@@ -102,8 +102,7 @@ def convert_image(image, intrinsics):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--video", default="/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/MNYoutube.mp4", type=str, help="path to image directory")
-    parser.add_argument("--calib", default="/media/Data/projects/DROID-SLAM/calib/gopro9_wide.txt", type=str, help="path to calibration file")
-    parser.add_argument("--t0", default=0, type=int, help="starting frame")
+    parser.add_argument("--calib", default="/media/Data/projects/DROID-SLAM/calib/gopro9_linear.txt", type=str, help="path to calibration file")
     parser.add_argument("--stride", default=1, type=int, help="frame stride")
 
     parser.add_argument("--weights", default="droid.pth")
@@ -127,7 +126,8 @@ if __name__ == '__main__':
         default="/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/MN_results", 
         help="path to saved reconstruction")
     parser.add_argument("--do_localization", default=False)
-    parser.add_argument("--skip_seconds", type=float, default=0.0)
+    parser.add_argument("--t0", type=float, default=0.0)
+    parser.add_argument("--tend", type=float, default=-1.0)
     args = parser.parse_args()
 
     args.stereo = False
@@ -158,8 +158,12 @@ if __name__ == '__main__':
     while True:
         ret, I = cap.read()
         ts_ns = int(1e6*cap.get(cv2.CAP_PROP_POS_MSEC))
-        if ts_ns*1-9 < args.skip_seconds:
+        ts_s = ts_ns*1e-9
+        if ts_s < args.t0:
             continue
+        if ts_s > args.tend and args.tend > args.t0:
+            break
+
         if not ret:
             invalid_images += 1
             if invalid_images > 100:
@@ -178,6 +182,7 @@ if __name__ == '__main__':
 
         if droid is None:
             args.image_size = [image_t.shape[2], image_t.shape[3]]
+            print(args.image_size)
             droid = Droid(args)
         
         num_kfs = droid.track(ts_ns, image_t, intrinsics=intrinsics_t)

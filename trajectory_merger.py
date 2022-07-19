@@ -37,10 +37,10 @@ def load_from_saved_reconstruction( recon_path, to_align=False):
 
     return tstamps, images, disps, poses, intrinsics, fmaps, nets, inps
 
-traj1 = "/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/NH_results"
-traj2 = "/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/MN_results"
+traj1 = "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike1_trail1_results"
+traj2 = "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike2_trail1_results"
 
-merged_path = "/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/common"
+merged_path = "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/merged"
 
 tstamps1, images1, disps1, poses1, intrinsics1, fmaps1, nets1, inps1 = \
     load_from_saved_reconstruction(traj1, True)
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     args.stereo = False
     args.do_localization = False
-    args.image_size = [270, 480]
+    args.image_size = [328, 584]
     droid = DroidMerger(args)
 
     droid.load_from_saved_reconstruction(merged_path)
