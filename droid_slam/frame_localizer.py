@@ -43,6 +43,7 @@ class ReLocalizer:
                                     nms=self.backend_nms, 
                                     thresh=self.backend_thresh, 
                                     beta=self.beta)
+        print("Updated factor graph")
 
     @torch.cuda.amp.autocast(enabled=True)
     def __context_encoder(self, image):
@@ -94,6 +95,7 @@ class ReLocalizer:
             print("Found {} close frames: ".format(len(indices)))
             sorted_motion_mags = np.argsort(np.array(small_motion_mags))
             sorted_indices = [indices[idx] for idx in sorted_motion_mags]
+            print("Closest id: ",sorted_indices[0])
             closest_img = self.video.images[sorted_indices[0]].permute(1, 2, 0).cpu().numpy()
             image_np = image.squeeze(0).permute(1, 2, 0).cpu().numpy()
 

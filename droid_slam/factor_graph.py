@@ -247,7 +247,7 @@ class FactorGraph:
 
 
     @torch.cuda.amp.autocast(enabled=False)
-    def update_lowmem(self, t0=None, t1=None, itrs=2, use_inactive=False, EP=1e-7, steps=8):
+    def update_lowmem(self, t0=None, t1=None, itrs=2, use_inactive=False, EP=1e-7, steps=8, motion_only=False):
         """ run update operator on factor graph - reduced memory implementation """
 
         # alternate corr implementation
@@ -291,7 +291,7 @@ class FactorGraph:
 
             # dense bundle adjustment
             self.video.ba(target, weight, damping, self.ii, self.jj, 1, t, 
-                itrs=itrs, lm=1e-5, ep=1e-2, motion_only=False)
+                itrs=itrs, lm=1e-5, ep=1e-2, motion_only=motion_only)
 
             self.video.dirty[:t] = True
 

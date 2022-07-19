@@ -32,6 +32,8 @@ class DroidFrontend:
         self.frontend_thresh = args.frontend_thresh
         self.frontend_radius = args.frontend_radius
 
+        self.localize_second_video = args.do_localization
+
     def __update(self):
         """ add edges, perform update """
 
@@ -88,7 +90,6 @@ class DroidFrontend:
         for itr in range(8):
             self.graph.update(1, use_inactive=True)
 
-
         # self.video.normalize()
         self.video.poses[self.t1] = self.video.poses[self.t1-1].clone()
         self.video.disps[self.t1] = self.video.disps[self.t1-4:self.t1].mean()
@@ -105,13 +106,54 @@ class DroidFrontend:
 
         self.graph.rm_factors(self.graph.ii < self.warmup-4, store=True)
 
+    def __localize_second_video(self, num_init_frames=5):
+
+        self.t0 = 0
+        self.t1 = self.video.counter.value
+        
+        for i in range(num_init_frames):
+            self.graph.add_factors([i], [self.t1-1])
+        
+        # do bundle adjustment to register first pose
+        for itr in range(8):
+            self.graph.update_lowmem(
+                t0 = self.t1-1, 
+                t1 = self.t1,
+                use_inactive=False, motion_only=True, steps=1)
+
+        # self.graph.add_proximity_factors(0, 0, rad=2, nms=2, thresh=self.frontend_thresh, remove=False)
+
+        # for itr in range(8):
+        #     self.graph.update(
+        #         t0 = 1, 
+        #         t1 = self.curr_timestamp_second_video+1,
+        #         use_inactive=False)
+            
+        # self.video.normalize()
+        self.video.poses[self.t1] = self.video.poses[self.t1-1].clone()
+        self.video.disps[self.t1] = self.video.disps[self.t1-1]
+
+        # initialization complete
+        self.is_initialized = True
+        self.last_pose = self.video.poses[self.t1-1].clone()
+        self.last_disp = self.video.disps[self.t1-1].clone()
+        self.last_time = self.video.tstamp[self.t1-1].clone()
+
+        with self.video.get_lock():
+            self.video.ready.value = 1
+            self.video.dirty[:self.t1] = True
+
     def __call__(self):
         """ main update """
 
-        # do initialization
-        if not self.is_initialized and self.video.counter.value == self.warmup:
-            self.__initialize()
+        if self.localize_second_video and self.is_initialized == False:
+           self.__localize_second_video()
+           self.is_initialized = True
             
+        # do initialization
+        if not self.is_initialized and self.video.counter.value == self.warmup and not self.localize_second_video:
+            self.__initialize()
+    
         # do update
         elif self.is_initialized and self.t1 < self.video.counter.value:
             self.__update()

@@ -101,13 +101,13 @@ def convert_image(image, intrinsics):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--video", default="/home/zosurban/Projects/DROID-SLAM-urbste/data/youtube/NHYoutube.mp4", type=str, help="path to image directory")
-    parser.add_argument("--calib", default="/home/zosurban/Projects/DROID-SLAM-urbste/calib/gopro9_wide.txt", type=str, help="path to calibration file")
+    parser.add_argument("--video", default="/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/MNYoutube.mp4", type=str, help="path to image directory")
+    parser.add_argument("--calib", default="/media/Data/projects/DROID-SLAM/calib/gopro9_wide.txt", type=str, help="path to calibration file")
     parser.add_argument("--t0", default=0, type=int, help="starting frame")
     parser.add_argument("--stride", default=1, type=int, help="frame stride")
 
     parser.add_argument("--weights", default="droid.pth")
-    parser.add_argument("--buffer", type=int, default=512)
+    parser.add_argument("--buffer", type=int, default=150)
     parser.add_argument("--disable_vis", action="store_true")
 
     parser.add_argument("--beta", type=float, default=0.3, help="weight for translation / rotation components of flow")
@@ -124,8 +124,10 @@ if __name__ == '__main__':
     parser.add_argument("--backend_nms", type=int, default=3)
     parser.add_argument("--upsample", action="store_true")
     parser.add_argument("--reconstruction_path", 
-        default="/home/zosurban/Projects/DROID-SLAM-urbste/data/youtube/NH_results/", 
+        default="/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/MN_results", 
         help="path to saved reconstruction")
+    parser.add_argument("--do_localization", default=False)
+    parser.add_argument("--skip_seconds", type=float, default=0.0)
     args = parser.parse_args()
 
     args.stereo = False
@@ -152,9 +154,12 @@ if __name__ == '__main__':
     had_zero = False
     frame_id = 0
     cap = cv2.VideoCapture(args.video)
+    num_tracked = 0
     while True:
         ret, I = cap.read()
         ts_ns = int(1e6*cap.get(cv2.CAP_PROP_POS_MSEC))
+        if ts_ns*1-9 < args.skip_seconds:
+            continue
         if not ret:
             invalid_images += 1
             if invalid_images > 100:
@@ -175,11 +180,13 @@ if __name__ == '__main__':
             args.image_size = [image_t.shape[2], image_t.shape[3]]
             droid = Droid(args)
         
-        droid.track(ts_ns, image_t, intrinsics=intrinsics_t)
-
+        num_kfs = droid.track(ts_ns, image_t, intrinsics=intrinsics_t)
+        if num_kfs >= args.buffer-2:
+            print("Buffer full. Stopping SLAM.")
+            break
 
     if args.reconstruction_path is not None:
         save_reconstruction(droid, args.reconstruction_path)
 
-    traj_est = droid.terminate(image_stream(args.imagedir, args.calib, args.stride))
+    traj_est = droid.terminate()
 

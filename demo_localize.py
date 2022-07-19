@@ -85,13 +85,13 @@ def convert_image(image, intrinsics):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--video", default="/home/zosurban/Projects/DROID-SLAM-urbste/data/youtube/MNYoutube.mp4", type=str, help="path to image directory")
-    parser.add_argument("--calib", default="/home/zosurban/Projects/DROID-SLAM-urbste/calib/gopro9_wide.txt", type=str, help="path to calibration file")
+    parser.add_argument("--video", default="/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/MNYoutube.mp4", type=str, help="path to image directory")
+    parser.add_argument("--calib", default="/media/Data/projects/DROID-SLAM/calib/gopro9_wide.txt", type=str, help="path to calibration file")
     parser.add_argument("--t0", default=0, type=int, help="starting frame")
     parser.add_argument("--stride", default=1, type=int, help="frame stride")
 
     parser.add_argument("--weights", default="droid.pth")
-    parser.add_argument("--buffer", type=int, default=512)
+    parser.add_argument("--buffer", type=int, default=20)
     parser.add_argument("--image_size", default=[240, 320])
     parser.add_argument("--disable_vis", action="store_true")
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     parser.add_argument("--backend_nms", type=int, default=3)
     parser.add_argument("--upsample", action="store_true")
     parser.add_argument("--reconstruction_path", 
-        default="/home/zosurban/Projects/DROID-SLAM-urbste/data/youtube/NH_results/", 
+        default="/media/Data/projects/DROID-SLAM/data/yt_gopro_mtb/NH_Youtube/NH_results/", 
         help="path to saved reconstruction")
     parser.add_argument("--do_localization", default=True)
     args = parser.parse_args()
@@ -160,6 +160,4 @@ if __name__ == '__main__':
         
         droid.track(ts_ns + last_timestamp + 1, image_t, intrinsics=intrinsics_t)
 
-
-    traj_est = droid.terminate(image_stream(args.imagedir, args.calib, args.stride))
 

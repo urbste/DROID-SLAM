@@ -15,9 +15,9 @@ from torch.multiprocessing import Process
 from factor_graph import FactorGraph
 
 
-class Droid:
+class DroidMerger:
     def __init__(self, args):
-        super(Droid, self).__init__()
+        super(DroidMerger, self).__init__()
         self.load_weights(args.weights)
         self.args = args
         self.disable_vis = args.disable_vis
@@ -25,17 +25,8 @@ class Droid:
         # store images, depth, poses, intrinsics (shared between processes)
         self.video = DepthVideo(args.image_size, args.buffer, stereo=args.stereo)
 
-        # filter incoming frames so that there is enough motion
-        self.filterx = MotionFilter(self.net, self.video, args.do_localization, thresh=args.filter_thresh)
-
-        # frontend process
-        self.frontend = DroidFrontend(self.net, self.video, self.args)
-        
         # backend process
         self.backend = DroidBackend(self.net, self.video, self.args)
-
-        # relocalizer
-        # self.localizer = ReLocalizer(self.net, self.video, self.args)
 
         # visualizer
         if not self.disable_vis:
@@ -67,34 +58,13 @@ class Droid:
         self.net.load_state_dict(state_dict)
         self.net.to("cuda:0").eval()
 
-    def track(self, tstamp, image, depth=None, intrinsics=None):
+    def merge(self):
         """ main thread - update map """
         with torch.no_grad():
-            # check there is enough motion             
-            self.filterx.track(tstamp, image, depth, intrinsics)
-
-            self.frontend()
-
             # global bundle adjustment
-            # self.backend()
+            self.backend()
 
-        return self.frontend.t1-1
-
-    def terminate(self, stream=None):
-        """ terminate the visualization process, return poses [t, q] """
-
-        del self.frontend
-
-        torch.cuda.empty_cache()
-        print("#" * 32)
-        self.backend(5)
-
-        torch.cuda.empty_cache()
-        print("#" * 32)
-        self.backend(5)
-
-        #camera_trajectory = self.traj_filler(stream)
-        #return camera_trajectory.inv().data.cpu().numpy()
+        
 
     def load_from_saved_reconstruction(self, recon_path):
         # load numpy arrays
@@ -112,6 +82,7 @@ class Droid:
         self.video.disps_up = torch.tensor(disps, device="cuda").share_memory_()
         depth = self.video.disps_up[:,3::8,3::8]
         self.disps_sens = torch.where(depth>0, 1.0/depth, depth)
+        self.disps = torch.tensor(depth, device="cuda").share_memory_()
 
         self.video.poses = torch.tensor(poses, device="cuda", dtype=torch.float).share_memory_()
         self.video.tstamp = torch.tensor(tstamps, device="cuda", dtype=torch.float).share_memory_()
@@ -122,6 +93,8 @@ class Droid:
         self.video.inps = torch.tensor(inps, dtype=torch.half, device="cuda").share_memory_()
 
         self.video.counter = torch.multiprocessing.Value('i', self.video.fmaps.shape[0])
+        #self.video.ht = self.video.fmaps.shape[-2]
+        #self.video.wd = self.video.fmaps.shape[-1]
 
         # initialize the factor graph from the old video
         #t = self.video.counter.value

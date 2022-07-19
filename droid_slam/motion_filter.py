@@ -12,7 +12,7 @@ from modules.corr import CorrBlock
 class MotionFilter:
     """ This class is used to filter incoming frames and extract features """
 
-    def __init__(self, net, video, thresh=2.5, device="cuda:0"):
+    def __init__(self, net, video, do_localization=False, thresh=2.5, device="cuda:0"):
         
         # split net modules
         self.cnet = net.cnet
@@ -24,6 +24,10 @@ class MotionFilter:
         self.device = device
 
         self.count = 0
+
+        if do_localization:
+            # assign the feature tensors from the first video frame of the first video
+            self.net, self.inp, self.fmap = self.video.nets[[0]],self.video.inps[0],self.video.fmaps[0]
 
         # mean, std for image normalization
         self.MEAN = torch.as_tensor([0.485, 0.456, 0.406], device=self.device)[:, None, None]
