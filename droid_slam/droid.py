@@ -110,8 +110,8 @@ class Droid:
         # init tensors
         self.video.images = torch.tensor(images, device="cuda", dtype=torch.uint8).share_memory_()
         self.video.disps_up = torch.tensor(disps, device="cuda").share_memory_()
-        depth = self.video.disps_up[:,3::8,3::8]
-        self.disps_sens = torch.where(depth>0, 1.0/depth, depth)
+        #depth = self.video.disps_up[:,3::8,3::8]
+        #self.disps_sens = torch.where(depth>0, 1.0/depth, depth)
 
         self.video.poses = torch.tensor(poses, device="cuda", dtype=torch.float).share_memory_()
         self.video.tstamp = torch.tensor(tstamps, device="cuda", dtype=torch.float).share_memory_()

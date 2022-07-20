@@ -1,14 +1,9 @@
 import open3d as o3d
 import numpy as np
-from lietorch import SE3, Sim3
+from lietorch import SE3
 import torch
 import os
-from telemetry_converter import TelemetryImporter
-from natsort import natsorted
-from gps_converter import ECEFtoENU
-# import GPS data
 
-global_enu_llh0 = 0
 
 def load_dataset(path):
 
@@ -42,35 +37,42 @@ def save_transfromed_poses(path, T12):
 
     return poses_new.T.numpy()
 
-p_w_c1 = load_dataset(
-    "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike1_trail1_results")
+if __name__ == '__main__':
+    import os
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path1", type=str, help="path to image directory")
+    parser.add_argument("--path2", type=str, help="path to image directory")
 
-p_w_c2 = load_dataset(
-    "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike2_trail1_results")
+    args = parser.parse_args()
+
+    p_w_c1 = load_dataset(args.path1)
+
+    p_w_c2 = load_dataset(args.path2)
 
 
-pcl1 = o3d.geometry.PointCloud()
-pcl1.points = o3d.utility.Vector3dVector(p_w_c1)
-pcl1.paint_uniform_color([1, 0.706, 0])
-pcl2 = o3d.geometry.PointCloud()
-pcl2.points = o3d.utility.Vector3dVector(p_w_c2)
-pcl2.paint_uniform_color([1, 0,  0.706])
+    pcl1 = o3d.geometry.PointCloud()
+    pcl1.points = o3d.utility.Vector3dVector(p_w_c1)
+    pcl1.paint_uniform_color([1, 0.706, 0])
+    pcl2 = o3d.geometry.PointCloud()
+    pcl2.points = o3d.utility.Vector3dVector(p_w_c2)
+    pcl2.paint_uniform_color([1, 0,  0.706])
 
 
-corr_list = np.arange(0, p_w_c1.shape[0])
-corres1 = o3d.utility.Vector2iVector(np.stack([corr_list,corr_list]).T)
-corr_list = np.arange(0, p_w_c2.shape[0])
-corres2 = o3d.utility.Vector2iVector(np.stack([corr_list,corr_list]).T)
+    corr_list = np.arange(0, p_w_c1.shape[0])
+    corres1 = o3d.utility.Vector2iVector(np.stack([corr_list,corr_list]).T)
+    corr_list = np.arange(0, p_w_c2.shape[0])
+    corres2 = o3d.utility.Vector2iVector(np.stack([corr_list,corr_list]).T)
 
-# Align visual to GPS
-trafo_estimator = o3d.pipelines.registration.TransformationEstimationPointToPoint(with_scaling=True)
+    # Align visual to GPS
+    trafo_estimator = o3d.pipelines.registration.TransformationEstimationPointToPoint(with_scaling=True)
 
-T12 = o3d.pipelines.registration.registration_ransac_based_on_correspondence(pcl1, pcl2, corres1, 0.01,
-    o3d.pipelines.registration.TransformationEstimationPointToPoint(with_scaling=True), ransac_n=6)
+    T12 = o3d.pipelines.registration.registration_ransac_based_on_correspondence(pcl1, pcl2, corres1, 0.1,
+        o3d.pipelines.registration.TransformationEstimationPointToPoint(with_scaling=True), ransac_n=6)
 
-transformed_poses = save_transfromed_poses("/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/bike1_trail1_results", T12.transformation)
+    transformed_poses = save_transfromed_poses(args.path1, T12.transformation)
 
-pcl1 = o3d.geometry.PointCloud()
-pcl1.points = o3d.utility.Vector3dVector(transformed_poses[:,0:3])
-pcl1.paint_uniform_color([1, 0.706, 0])
-o3d.visualization.draw_geometries([pcl1, pcl2])
+    pcl1 = o3d.geometry.PointCloud()
+    pcl1.points = o3d.utility.Vector3dVector(transformed_poses[:,0:3])
+    pcl1.paint_uniform_color([1, 0.706, 0])
+    o3d.visualization.draw_geometries([pcl1, pcl2])
