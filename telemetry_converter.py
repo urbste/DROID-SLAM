@@ -89,7 +89,8 @@ class TelemetryImporter:
         self.telemetry["timestamps_ns"] = timestamps_ns
         self.telemetry["camera_fps"] = camera_fps
         self.telemetry["camera_orientation"] = cori
-        self.telemetry["gravity_vector"] = gravity 
+        self.telemetry["gravity_vector"] = gravity # same timestamps as cori
+
         self.telemetry["image_timestamps_ns"] = img_timestamps_ns
         self.telemetry["gps_ecef_coords"] = gps_ecef
         self.telemetry["gps_llh"] = gps_llh
@@ -193,12 +194,45 @@ class TelemetryImporter:
 
         return camera_quaternions
 
+    def get_gravity_vector_at_times(self, times_ns=None):
+        # interpolate camera quaternions to frametimes
+        frame_grav = np.array(self.telemetry["gravity_vector"])
+        grav_times = np.array(self.telemetry["image_timestamps_ns"]) * self.ns_to_sec
+
+        if times_ns is not None:
+            frame_times = np.array(times_ns) * self.ns_to_sec
+        else:
+            frame_times = np.array(self.telemetry["image_timestamps_ns"]) * self.ns_to_sec
+
+        # find valid interval (interpolate only where we actually have gps measurements)
+        start_frame_time_idx = np.where(grav_times[0] < frame_times)[0][0]
+        end_frame_time_idx = np.where(grav_times[-1] <= frame_times)[0]
+        if not end_frame_time_idx:
+            end_frame_time_idx = len(frame_times)-1
+
+        cam_hz = 1 / self.telemetry["camera_fps"]
+        if times_ns is not None:
+            interp_frame_times = frame_times[start_frame_time_idx:end_frame_time_idx]
+        else:
+            interp_frame_times = np.round(
+            np.arange(
+                np.round(frame_times[start_frame_time_idx],2), 
+                np.round(frame_times[end_frame_time_idx],2) - cam_hz, cam_hz) ,3).tolist()
+
+
+        x_interp = np.interp(interp_frame_times, grav_times, frame_grav[:,0])
+        y_interp = np.interp(interp_frame_times, grav_times, frame_grav[:,1])
+        z_interp = np.interp(interp_frame_times, grav_times, frame_grav[:,2])
+        frame_grav_interp = np.stack([x_interp,y_interp,z_interp],1)
+
+        return frame_grav_interp
+
     def get_gps_pos_at_frametimes(self, img_times_ns=None):
 
         # interpolate camera gps info at frametimes
         frame_gps_ecef = np.array(self.telemetry["gps_ecef_coords"])
         gps_times = np.array(self.telemetry["gps_timestamps"]) * self.ns_to_sec
-        if img_times_ns:
+        if img_times_ns is not None:
             frame_times = np.array(img_times_ns) * self.ns_to_sec
         else:
             frame_times = np.array(self.telemetry["image_timestamps_ns"]) * self.ns_to_sec
@@ -210,7 +244,7 @@ class TelemetryImporter:
             end_frame_time_idx = len(frame_times)-1
 
         cam_hz = 1 / self.telemetry["camera_fps"]
-        if img_times_ns:
+        if img_times_ns is not None:
             interp_frame_times = frame_times[start_frame_time_idx:end_frame_time_idx]
         else:
             interp_frame_times = np.round(

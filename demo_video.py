@@ -63,6 +63,8 @@ def save_reconstruction(droid, reconstruction_path):
 
     t = droid.video.counter.value
     tstamps = droid.video.tstamp[:t].cpu().numpy()
+    all_tstamps = np.array(droid.all_video_timestamps_ns)
+
     images = droid.video.images[:t].cpu().numpy()
     disps = droid.video.disps_up[:t].cpu().numpy()
     poses = droid.video.poses[:t].cpu().numpy()
@@ -73,7 +75,9 @@ def save_reconstruction(droid, reconstruction_path):
     inps = droid.video.inps[:t].cpu().numpy()
 
     Path("{}".format(reconstruction_path)).mkdir(parents=True, exist_ok=True)
-    np.save("{}/tstamps.npy".format(reconstruction_path), tstamps)
+    np.save("{}/kf_tstamps.npy".format(reconstruction_path), tstamps)
+    np.save("{}/all_tstamps.npy".format(reconstruction_path), all_tstamps)
+
     np.save("{}/images.npy".format(reconstruction_path), images)
     np.save("{}/disps.npy".format(reconstruction_path), disps)
     np.save("{}/poses.npy".format(reconstruction_path), poses)

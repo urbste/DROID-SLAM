@@ -24,13 +24,11 @@ CAM_POINTS = np.array([
 CAM_LINES = np.array([
     [1,2], [2,3], [3,4], [4,1], [1,0], [0,2], [3,0], [0,4], [5,7], [7,6]])
 
-def create_camera_actor(g, scale=0.05):
+def create_camera_actor(g, color=(1,0,0),scale=0.05):
     """ build open3d camera polydata """
     camera_actor = o3d.geometry.LineSet(
         points=o3d.utility.Vector3dVector(scale * CAM_POINTS),
         lines=o3d.utility.Vector2iVector(CAM_LINES))
-
-    color = (g * 1.0, 0.5 * (1-g), 0.9 * (1-g))
     camera_actor.paint_uniform_color(color)
     return camera_actor
 
@@ -45,7 +43,11 @@ def load_dataset(path):
     poses_c_w = np.load(os.path.join(path,"poses.npy"))
     images_np = np.load(os.path.join(path,"images.npy"))
     intrinsics_np = np.load(os.path.join(path,"intrinsics.npy"))
-    disps = torch.tensor(np.load(os.path.join(path,"disps.npy"))).float().cuda()
+    timestamps_np = np.load(os.path.join(path,"tstamps.npy"))
+    # find second video for different color
+    tstamps_diff = np.abs(timestamps_np[1:] - timestamps_np[:-1])*1e-9 > 5
+    idx_second_cam = np.where(tstamps_diff == True)[0]+1
+    disps = torch.tensor(np.load(os.path.join(path,"disps.npy"))[:,3::8,3::8]).float().cuda()
     intrinsics0 = torch.tensor(intrinsics_np)[0].float().cuda()
     # convert poses to 4x4 matrix
     poses = torch.tensor(poses_c_w).float().cuda()
@@ -55,8 +57,7 @@ def load_dataset(path):
     images = images.cpu()[:,[2,1,0],3::8,3::8].permute(0,2,3,1) / 255.0
     points = droid_backends.iproj(SE3(poses).inv().data, disps,intrinsics0).cpu()
 
-    thresh = 0.005 * torch.ones_like(disps.mean(dim=[1,2]))
-
+    thresh = 0.01 * torch.ones_like(disps.mean(dim=[1,2]))
 
     count = droid_backends.depth_filter(
         poses, disps, intrinsics0, torch.arange(0,poses_c_w.shape[0],1).long().cuda(), thresh)
@@ -73,8 +74,10 @@ def load_dataset(path):
         mask = masks[i].reshape(-1)
         pts = points[i].reshape(-1, 3)[mask].cpu().numpy()
         clr = images[i].reshape(-1, 3)[mask].cpu().numpy()
-        
-        cam_actor = create_camera_actor(True)
+        if i >= idx_second_cam:
+            cam_actor = create_camera_actor(True,color=(1,0,0))
+        else:
+            cam_actor = create_camera_actor(True,color=(0,1,0))
         cam_actor.transform(pose)
         camera_actors.append(cam_actor)
         ## add point actor ###
@@ -83,11 +86,15 @@ def load_dataset(path):
     return camera_actors, point_cloud
 
 camera_actors, point_cloud = load_dataset(
-    "/home/zosurban/Projects/DROID-SLAM-urbste/data/steffen/merged")
+    "/media/Data/Sparsenet/OrbSlam3/TestMappingRelocalization/JenzigTrailsJune/merged")
 
 # pcl1 = o3d.geometry.PointCloud()
 # pcl1.points = o3d.utility.Vector3dVector(p_w_c1)
 # pcl1.paint_uniform_color([1, 0.706, 0])
 
-o3d.visualization.draw_geometries([camera_actors])
+camera_actors.extend([point_cloud])
+o3d.visualization.draw_geometries(camera_actors)
+
+
+
 

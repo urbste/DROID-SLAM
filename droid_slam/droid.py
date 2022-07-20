@@ -50,6 +50,7 @@ class Droid:
         self.localize_new_video = args.do_localization
         self.is_localized = False
 
+        self.all_video_timestamps_ns = []
 
     def load_weights(self, weights):
         """ load trained model weights """
@@ -77,7 +78,8 @@ class Droid:
 
             # global bundle adjustment
             # self.backend()
-
+            self.all_video_timestamps_ns.append(tstamp)
+            
         return self.frontend.t1-1
 
     def terminate(self, stream=None):

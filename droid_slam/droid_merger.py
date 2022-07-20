@@ -28,18 +28,14 @@ class DroidMerger:
         # backend process
         self.backend = DroidBackend(self.net, self.video, self.args)
 
-        # visualizer
-        if not self.disable_vis:
-            from visualization import droid_visualization
-            self.visualizer = Process(target=droid_visualization, args=(self.video,))
-            self.visualizer.start()
+        # # visualizer
+        # if not self.disable_vis:
+        #     from visualization import droid_visualization
+        #     self.visualizer = Process(target=droid_visualization, args=(self.video,))
+        #     self.visualizer.start()
 
-        # post processor - fill in poses for non-keyframes
-        self.traj_filler = PoseTrajectoryFiller(self.net, self.video)
-
-        # localize new video
-        self.localize_new_video = args.do_localization
-        self.is_localized = False
+        # # post processor - fill in poses for non-keyframes
+        # self.traj_filler = PoseTrajectoryFiller(self.net, self.video)
 
 
     def load_weights(self, weights):
@@ -58,17 +54,16 @@ class DroidMerger:
         self.net.load_state_dict(state_dict)
         self.net.to("cuda:0").eval()
 
-    def merge(self):
+    def merge(self, steps=1):
         """ main thread - update map """
         with torch.no_grad():
             # global bundle adjustment
-            self.backend()
+            self.backend(steps)
 
-        
 
     def load_from_saved_reconstruction(self, recon_path):
         # load numpy arrays
-        tstamps = np.load("{}/tstamps.npy".format(recon_path))
+        tstamps = np.load("{}/kf_tstamps.npy".format(recon_path))
         images = np.load("{}/images.npy".format(recon_path))
         disps = np.load("{}/disps.npy".format(recon_path))
         poses = np.load("{}/poses.npy".format(recon_path))
@@ -76,6 +71,9 @@ class DroidMerger:
         fmaps = np.load("{}/fmaps.npy".format(recon_path))
         nets = np.load("{}/nets.npy".format(recon_path))
         inps = np.load("{}/inps.npy".format(recon_path))
+
+        self.all_tstamps = np.load("{}/all_tstamps.npy".format(recon_path))
+
 
         # init tensors
         self.video.images = torch.tensor(images, device="cuda", dtype=torch.uint8).share_memory_()
